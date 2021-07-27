@@ -8,6 +8,7 @@
         name: mytest
         image: fedora
         privileged: yes
+        rm: yes
         command: 
           - /bin/sh
           - -c
