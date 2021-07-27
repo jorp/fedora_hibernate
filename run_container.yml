@@ -1,0 +1,21 @@
+---
+- hosts: localhost
+  become: yes
+
+  tasks:
+    - name: run test container
+      containers.podman.podman_container:
+        name: mytest
+        image: fedora
+        privileged: yes
+        command: 
+          - /bin/sh
+          - -c
+          - | 
+              dnf upgrade -y &> /dev/null
+              dnf install -y gcc wget &> /dev/null
+              wget 'https://raw.githubusercontent.com/osandov/osandov-linux/61679ecd914d653bab14d0e752595e86b9f50513/scripts/btrfs_map_physical.c' &> /dev/null
+              gcc -O2 -o btrfs_map_physical btrfs_map_physical.c &> /dev/null
+              ./btrfs_map_physical /var/swapper | sed -n '2p' | awk '{print $NF}'
+        state: started
+        volume: /var/swapper:/var/swapper
