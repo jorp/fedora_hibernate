@@ -1,37 +1,39 @@
 ---
 - hosts: all
   become: yes
+  vars:
+    swapfile_path: "/swapfile"
 
   tasks:
-    # multiply by 1024
     - name: save memory as bytes
       set_fact:
         mem_bytes: "{{ ansible_memtotal_mb * 1024 * 1024}}"
 
     - name: touch the file
       file:
-        path: /var/swapper
+        path: "{{ swapfile_path }}"
         state: touch
         owner: root
         group: root
         mode: '0600'
         attributes: "+C"
 
-    - name: fallocate stuff
-      command: fallocate -l "{{mem_bytes}}" /var/swapper
+    - name: fallocate swapfile
+      command: fallocate -l "{{mem_bytes}}" "{{ swapfile_path }}"
 
     - name: mkswap
-      command: mkswap /var/swapper
+      command: mkswap "{{ swapfile_path }}"
 
     - name: turn swap on
-      command: swapon /var/swapper
+      command: swapon "{{ swapfile_path }}"
 
     - name: add swap to fstab
       lineinfile:
         dest: /etc/fstab
         backup: yes
         state: present
-        line: "/var/swapper none swap sw 0 0"
+        line: "{{swapfile_path}} none swap sw 0 0"
+
     - block:
       - name: create directories for overrides
         file:
@@ -57,12 +59,11 @@
             [Service]
             Environment=SYSTEMD_BYPASS_HIBERNATION_MEMORY_CHECK=1
 
-    - name: run test container
+    - name: run container to get offset
       containers.podman.podman_container:
         name: mytest
         image: fedora
         privileged: yes
-          #interactive: yes
         detach: no
         rm: yes
         command: 
@@ -73,18 +74,14 @@
               dnf install -y gcc wget &> /dev/null
               wget 'https://raw.githubusercontent.com/osandov/osandov-linux/61679ecd914d653bab14d0e752595e86b9f50513/scripts/btrfs_map_physical.c' &> /dev/null
               gcc -O2 -o btrfs_map_physical btrfs_map_physical.c &> /dev/null
-              ./btrfs_map_physical /var/swapper | sed -n '2p' | awk '{print $NF}'
+              ./btrfs_map_physical "{{ swapfile_path }}" | sed -n '2p' | awk '{print $NF}'
         state: started
-        volume: /var/swapper:/var/swapper
+        volume: "{{ swapfile_path }}:{{ swapfile_path }}"
       register: physical_swap_offset
 
-    - name: set pso fact
+    - name: set physical_swap_offset fact
       set_fact:
         pso: "{{ physical_swap_offset.stdout | trim }}"
-
-    - name: output physical btrfs offset
-      debug:
-        msg: "{{ pso }}"
 
     - name: get pagesize
       command: getconf PAGESIZE
@@ -94,22 +91,13 @@
       set_fact:
         page_size: "{{ ps.stdout | trim }}"
 
-    - name: output page size
-      debug:
-        msg: "{{ page_size }}"
-
     - name: calculate swap offset
       set_fact:
         swap_offset: "{{ (pso|int/page_size|int)|int }}"
-          #swap_offset: "{{ (pso)|int / (page_size)|int) }}"
       register: swapo
 
-    - name: output swap offset
-      debug:
-        msg: "{{ swapo }}"
-
     - name: get swap uuid
-      command: findmnt -no UUID -T /var/swapper
+      command: findmnt -no UUID -T "{{ swapfile_path }}"
       register: uuid
 
     - name: set swap_uuid fact
