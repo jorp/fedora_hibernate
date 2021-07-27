@@ -1,12 +1,12 @@
 ---
-- hosts: localhost
+- hosts: all
   become: yes
 
   tasks:
     # multiply by 1024
-    - name: print all memory
-      debug:
-        msg: "{{ ansible_memtotal_mb }}"
+    - name: save memory as bytes
+      set_fact:
+        mem_bytes: "{{ ansible_memtotal_mb * 1024 * 1024}}"
 
     - name: touch the file
       file:
@@ -18,7 +18,7 @@
         attributes: "+C"
 
     - name: fallocate stuff
-      command: fallocate -l 1G /var/swapper
+      command: fallocate -l "{{mem_bytes}}" /var/swapper
 
     - name: mkswap
       command: mkswap /var/swapper
@@ -32,6 +32,30 @@
         backup: yes
         state: present
         line: "/var/swapper none swap sw 0 0"
+    - block:
+      - name: create directories for overrides
+        file:
+          path: "{{ item }}"
+          state: directory
+        loop:
+          - /etc/systemd/system/systemd-logind.service.d
+          - /etc/systemd/system/systemd-hibernate.service.d
+
+      - name: add logind override
+        blockinfile:
+          path: /etc/systemd/system/systemd-logind.service.d/override.conf
+          create: yes
+          block: |
+            [Service]
+            Environment=SYSTEMD_BYPASS_HIBERNATION_MEMORY_CHECK=1
+
+      - name: add hibernate override
+        blockinfile:
+          path: /etc/systemd/system/systemd-hibernate.service.d/override.conf
+          create: yes
+          block: |
+            [Service]
+            Environment=SYSTEMD_BYPASS_HIBERNATION_MEMORY_CHECK=1
 
     - name: run test container
       containers.podman.podman_container:
@@ -54,6 +78,31 @@
         volume: /var/swapper:/var/swapper
       register: physical_swap_offset
 
+    - name: set pso fact
+      set_fact:
+        pso: "{{ physical_swap_offset.stdout | trim }}"
+
     - name: output physical btrfs offset
       debug:
-        msg: "{{ physical_swap_offset.stdout }}"
+        msg: "{{ pso }}"
+
+    - name: get pagesize
+      command: getconf PAGESIZE
+      register: ps
+
+    - name: set page size fact
+      set_fact:
+        page_size: "{{ ps.stdout | trim }}"
+
+    - name: output page size
+      debug:
+        msg: "{{ page_size }}"
+
+    - name: calculate swap offset
+      set_fact:
+        swap_offset: "{{ (pso / page_size)|int }}"
+      register: swapo
+
+    - name: output swap offset
+      debug:
+        msg: "{{ swapo }}"
