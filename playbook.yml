@@ -3,6 +3,11 @@
   become: yes
 
   tasks:
+    # multiply by 1024
+    - name: print all memory
+      debug:
+        msg: "{{ ansible_memtotal_mb }}"
+
     - name: touch the file
       file:
         path: /var/swapper
@@ -14,6 +19,19 @@
 
     - name: fallocate stuff
       command: fallocate -l 1G /var/swapper
+
+    - name: mkswap
+      command: mkswap /var/swapper
+
+    - name: turn swap on
+      command: swapon /var/swapper
+
+    - name: add swap to fstab
+      lineinfile:
+        dest: /etc/fstab
+        backup: yes
+        state: present
+        line: "/var/swapper none swap sw 0 0"
 
     - name: run test container
       containers.podman.podman_container:
@@ -34,8 +52,8 @@
               ./btrfs_map_physical /var/swapper | sed -n '2p' | awk '{print $NF}'
         state: started
         volume: /var/swapper:/var/swapper
-      register: output
+      register: physical_swap_offset
 
     - name: output physical btrfs offset
       debug:
-        msg: "{{ output.stdout }}"
+        msg: "{{ physical_swap_offset.stdout }}"
