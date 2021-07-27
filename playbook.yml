@@ -108,6 +108,14 @@
       debug:
         msg: "{{ swapo }}"
 
+    - name: get swap uuid
+      command: findmnt -no UUID -T /var/swapper
+      register: uuid
+
+    - name: set swap_uuid fact
+      set_fact:
+        swap_uuid: "{{ uuid.stdout | trim }}"
+
     - name: set resume_args fact
       set_fact:
         resume_args: "resume=UUID={{ swap_uuid }} resume_offset={{ swap_offset }}"
@@ -115,3 +123,15 @@
     - name: output resume args
       debug:
         msg: "{{ resume_args }}"
+
+    - name: update grub
+      command: grubby --update-kernel=ALL --args={{ resume_args }}
+
+    - name: add resume module to dracut
+      lineinfile:
+        path: /etc/dracut.conf.d/resume.conf
+        create: yes
+        line: 'add_dracutmodules+=" resume "'
+
+    - name: update initramfs
+      command: dracut -f
