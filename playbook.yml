@@ -100,9 +100,18 @@
 
     - name: calculate swap offset
       set_fact:
-        swap_offset: "{{ (pso / page_size)|int }}"
+        swap_offset: "{{ (pso|int/page_size|int)|int }}"
+          #swap_offset: "{{ (pso)|int / (page_size)|int) }}"
       register: swapo
 
     - name: output swap offset
       debug:
         msg: "{{ swapo }}"
+
+    - name: set resume_args fact
+      set_fact:
+        resume_args: "resume=UUID={{ swap_uuid }} resume_offset={{ swap_offset }}"
+
+    - name: output resume args
+      debug:
+        msg: "{{ resume_args }}"
