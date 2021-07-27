@@ -3,11 +3,25 @@
   become: yes
 
   tasks:
+    - name: touch the file
+      file:
+        path: /var/swapper
+        state: touch
+        owner: root
+        group: root
+        mode: '0600'
+        attributes: "+C"
+
+    - name: fallocate stuff
+      command: fallocate -l 1G /var/swapper
+
     - name: run test container
       containers.podman.podman_container:
         name: mytest
         image: fedora
         privileged: yes
+          #interactive: yes
+        detach: no
         rm: yes
         command: 
           - /bin/sh
@@ -20,3 +34,8 @@
               ./btrfs_map_physical /var/swapper | sed -n '2p' | awk '{print $NF}'
         state: started
         volume: /var/swapper:/var/swapper
+      register: output
+
+    - name: output physical btrfs offset
+      debug:
+        msg: "{{ output.stdout }}"
