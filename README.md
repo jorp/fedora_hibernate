@@ -9,5 +9,6 @@ see my blog post about this topic [here](jorp.xyz)
 - set `swapfile_path` var to desired swapfile location
 
 ```bash
+ansible-galaxy collection install containers.podman
 ansible-playbook playbook.yml -K
 ```
