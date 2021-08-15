@@ -1,6 +1,6 @@
 ---
-- hosts: all
-  become: localhost
+- hosts: localhost
+  become: yes
   vars:
     swapfile_path: "/swapfile"
 
